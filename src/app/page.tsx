@@ -1,6 +1,7 @@
 "use client";
 
 import { DragEvent, useRef, useState } from "react";
+import { analyzeMatch, MatchResult } from "@/lib/match";
 
 type SourceKind = "resume" | "job";
 
@@ -20,7 +21,7 @@ export default function Home() {
   const [resumeError, setResumeError] = useState("");
   const [jobError, setJobError] = useState("");
   const [dragging, setDragging] = useState<SourceKind | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [analysis, setAnalysis] = useState<MatchResult | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
   const jobInput = useRef<HTMLInputElement>(null);
 
@@ -33,7 +34,7 @@ export default function Home() {
     const setError = kind === "resume" ? setResumeError : setJobError;
     const setFile = kind === "resume" ? setResumeFile : setJobFile;
     setError("");
-    setSubmitted(false);
+    setAnalysis(null);
 
     if (!acceptedTypes.includes(file.type) || ![".pdf", ".docx", ".txt"].some((extension) => file.name.toLowerCase().endsWith(extension))) {
       setError(`Use a ${acceptedLabels} file.`);
@@ -60,12 +61,12 @@ export default function Home() {
       setJobFile(null);
       if (jobInput.current) jobInput.current.value = "";
     }
-    setSubmitted(false);
+    setAnalysis(null);
   }
 
   function analyze() {
     if (!canAnalyze) return;
-    setSubmitted(true);
+    setAnalysis(analyzeMatch(resumeText, jobText));
   }
 
   return (
@@ -119,7 +120,7 @@ export default function Home() {
               error={resumeError}
               dragging={dragging === "resume"}
               inputRef={resumeInput}
-              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setSubmitted(false); }}
+              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); }}
               onFile={(file) => addFile("resume", file)}
               onDrop={(event) => handleDrop("resume", event)}
               onDragStart={() => setDragging("resume")}
@@ -136,7 +137,7 @@ export default function Home() {
               error={jobError}
               dragging={dragging === "job"}
               inputRef={jobInput}
-              onTextChange={(value) => { setJobText(value); setJobFile(null); setSubmitted(false); }}
+              onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); }}
               onFile={(file) => addFile("job", file)}
               onDrop={(event) => handleDrop("job", event)}
               onDragStart={() => setDragging("job")}
@@ -151,12 +152,32 @@ export default function Home() {
             <button className="primary-button" type="button" disabled={!canAnalyze} onClick={analyze}>Run match analysis <span aria-hidden="true">→</span></button>
           </div>
 
-          {submitted && <div className="success-panel" role="status"><span className="success-check">✓</span><div><strong>Both sources are ready.</strong><p>Your next step is to review the match breakdown and evidence behind each recommendation.</p></div><button type="button" onClick={() => setSubmitted(false)}>Edit sources</button></div>}
+          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} />}
 
           <footer className="page-footer"><span>Built for thoughtful applications.</span><span>PDF, DOCX, and TXT up to 10 MB</span></footer>
         </div>
       </section>
     </main>
+  );
+}
+
+function AnalysisPanel({ result, onEdit }: { result: MatchResult; onEdit: () => void }) {
+  return (
+    <section className="analysis-panel" aria-live="polite">
+      <div className="analysis-header">
+        <div><p className="section-kicker">Step 02 <span>of 03</span></p><h2>Match breakdown</h2><p className="analysis-note">A directional comparison based on text found in both sources. It is not a hiring prediction.</p></div>
+        <div className="score-ring"><strong>{result.score}</strong><span>/ 100</span></div>
+      </div>
+      <div className="analysis-grid">
+        <div className="analysis-column"><div className="analysis-label"><span className="match-dot" />Already showing up <b>{result.matchedSkills.length}</b></div><div className="skill-list">{result.matchedSkills.length ? result.matchedSkills.map((skill) => <span className="skill-chip matched" key={skill}>{skill}<span>✓</span></span>) : <p className="empty-analysis">No shared skills were detected yet.</p>}</div></div>
+        <div className="analysis-column"><div className="analysis-label"><span className="gap-dot" />Worth making visible <b>{result.missingSkills.length}</b></div><div className="skill-list">{result.missingSkills.length ? result.missingSkills.map((skill) => <span className="skill-chip missing" key={skill}>{skill}<span>+</span></span>) : <p className="empty-analysis">No obvious gaps detected.</p>}</div></div>
+      </div>
+      <div className="evidence-grid">
+        <div><h3>Evidence from your resume</h3>{result.evidence.length ? result.evidence.map((item) => <p className="evidence-item" key={item}>{item}</p>) : <p className="empty-analysis">Add more detail to your resume to create evidence.</p>}</div>
+        <div><h3>Grounded suggestions</h3>{result.suggestions.length ? result.suggestions.map((item) => <p className="evidence-item suggestion" key={item}>{item}</p>) : <p className="empty-analysis">Your sources are aligned. Review the wording before applying.</p>}</div>
+      </div>
+      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button></div>
+    </section>
   );
 }
 
