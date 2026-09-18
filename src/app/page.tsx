@@ -1,11 +1,13 @@
 "use client";
 
-import { DragEvent, useRef, useState } from "react";
+import { DragEvent, useEffect, useRef, useState } from "react";
 import { analyzeMatch, MatchResult } from "@/lib/match";
 import { extractText } from "@/lib/extract";
 
 type SourceKind = "resume" | "job";
 type SourceStatus = "idle" | "extracting" | "ready";
+type ApplicationStatus = "Saved" | "Applied" | "Interview" | "Offer" | "Closed";
+type Application = { role: string; company: string; deadline: string; status: ApplicationStatus; nextAction: string; notes: string; score: number };
 
 const acceptedTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
 const acceptedLabels = ".pdf, .docx, or .txt";
@@ -26,12 +28,22 @@ export default function Home() {
   const [jobStatus, setJobStatus] = useState<SourceStatus>("idle");
   const [dragging, setDragging] = useState<SourceKind | null>(null);
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
+  const [application, setApplication] = useState<Application | null>(null);
+  const [trackerOpen, setTrackerOpen] = useState(false);
   const resumeInput = useRef<HTMLInputElement>(null);
   const jobInput = useRef<HTMLInputElement>(null);
 
   const hasResume = Boolean(resumeText.trim()) && resumeStatus !== "extracting";
   const hasJob = Boolean(jobText.trim()) && jobStatus !== "extracting";
   const canAnalyze = hasResume && hasJob;
+
+  useEffect(() => {
+    const hydrationTimer = window.setTimeout(() => {
+      const saved = window.localStorage.getItem("matchline-application");
+      if (saved) setApplication(JSON.parse(saved) as Application);
+    }, 0);
+    return () => window.clearTimeout(hydrationTimer);
+  }, []);
 
   async function addFile(kind: SourceKind, file?: File) {
     if (!file) return;
@@ -100,7 +112,7 @@ export default function Home() {
         </div>
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <a className="nav-item active" href="#upload"><span className="nav-icon">+</span>New match</a>
-          <a className="nav-item" href="#applications"><span className="nav-icon">□</span>Applications <span className="nav-count">0</span></a>
+          <a className="nav-item" href="#applications"><span className="nav-icon">□</span>Applications <span className="nav-count">{application ? "1" : "0"}</span></a>
           <a className="nav-item" href="#library"><span className="nav-icon">▤</span>Resume library</a>
         </nav>
         <div className="sidebar-footer">
@@ -175,7 +187,8 @@ export default function Home() {
             <button className="primary-button" type="button" disabled={!canAnalyze} onClick={analyze}>Run match analysis <span aria-hidden="true">→</span></button>
           </div>
 
-          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} />}
+          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} />}
+          {(trackerOpen || application) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} onSave={(nextApplication) => { setApplication(nextApplication); setTrackerOpen(false); window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication)); }} onClose={() => setTrackerOpen(false)} />}
 
           <footer className="page-footer"><span>Built for thoughtful applications.</span><span>PDF, DOCX, and TXT up to 10 MB</span></footer>
         </div>
@@ -184,7 +197,7 @@ export default function Home() {
   );
 }
 
-function AnalysisPanel({ result, onEdit }: { result: MatchResult; onEdit: () => void }) {
+function AnalysisPanel({ result, onEdit, onSave }: { result: MatchResult; onEdit: () => void; onSave: () => void }) {
   return (
     <section className="analysis-panel" aria-live="polite">
       <div className="analysis-header">
@@ -199,7 +212,33 @@ function AnalysisPanel({ result, onEdit }: { result: MatchResult; onEdit: () => 
         <div><h3>Evidence from your resume</h3>{result.evidence.length ? result.evidence.map((item) => <p className="evidence-item" key={item}>{item}</p>) : <p className="empty-analysis">Add more detail to your resume to create evidence.</p>}</div>
         <div><h3>Grounded suggestions</h3>{result.suggestions.length ? result.suggestions.map((item) => <p className="evidence-item suggestion" key={item}>{item}</p>) : <p className="empty-analysis">Your sources are aligned. Review the wording before applying.</p>}</div>
       </div>
-      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button></div>
+      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
+    </section>
+  );
+}
+
+function ApplicationTracker({ application, score, onSave, onClose }: { application: Application | null; score: number; onSave: (application: Application) => void; onClose: () => void }) {
+  const [draft, setDraft] = useState<Application>(application ?? { role: "", company: "", deadline: "", status: "Saved", nextAction: "", notes: "", score });
+  const [editing, setEditing] = useState(!application);
+  const update = (field: keyof Application, value: string) => setDraft((current) => ({ ...current, [field]: value }));
+  const saveDraft = () => { onSave(draft); setEditing(false); };
+
+  return (
+    <section className="tracker-panel" id="applications">
+      <div className="tracker-header"><div><p className="section-kicker">Step 03 <span>of 03</span></p><h2>Application tracker</h2><p>Keep the next move visible while the match is still fresh.</p></div>{application && <span className="tracker-score">{application.score}<small>/100 match</small></span>}</div>
+      {application && !editing ? (
+        <div className="application-card"><div className="application-main"><span className="application-status">{application.status}</span><h3>{application.role || "Untitled role"}</h3><strong>{application.company || "Company not added"}</strong>{application.deadline && <span className="deadline">Deadline {application.deadline}</span>}</div><div className="application-details"><div><span>Next action</span><strong>{application.nextAction || "Add a next action"}</strong></div><div><span>Notes</span><p>{application.notes || "No notes yet."}</p></div></div><button type="button" className="edit-analysis" onClick={() => setEditing(true)}>Edit application</button></div>
+      ) : (
+        <form className="tracker-form" onSubmit={(event) => { event.preventDefault(); saveDraft(); }}>
+          <label>Role<input value={draft.role} onChange={(event) => update("role", event.target.value)} placeholder="Frontend Engineer" required /></label>
+          <label>Company<input value={draft.company} onChange={(event) => update("company", event.target.value)} placeholder="Company name" required /></label>
+          <label>Deadline<input type="date" value={draft.deadline} onChange={(event) => update("deadline", event.target.value)} /></label>
+          <label>Status<select value={draft.status} onChange={(event) => update("status", event.target.value)}>{["Saved", "Applied", "Interview", "Offer", "Closed"].map((status) => <option key={status}>{status}</option>)}</select></label>
+          <label className="wide-field">Next action<input value={draft.nextAction} onChange={(event) => update("nextAction", event.target.value)} placeholder="Tailor bullets and apply Friday" /></label>
+          <label className="wide-field">Notes<textarea value={draft.notes} onChange={(event) => update("notes", event.target.value)} placeholder="What do you want to remember?" rows={3} /></label>
+          <div className="tracker-form-actions"><button type="button" className="edit-analysis" onClick={onClose}>Cancel</button><button className="track-button" type="submit">Save application <span>→</span></button></div>
+        </form>
+      )}
     </section>
   );
 }
