@@ -4,6 +4,7 @@ import { DragEvent, useEffect, useRef, useState } from "react";
 import { analyzeMatch, MatchResult } from "@/lib/match";
 import { extractText } from "@/lib/extract";
 import { buildInterviewPrep, InterviewQuestion } from "@/lib/interview";
+import { buildBulletSuggestions, BulletSuggestion } from "@/lib/bullets";
 
 type SourceKind = "resume" | "job";
 type SourceStatus = "idle" | "extracting" | "ready";
@@ -32,6 +33,7 @@ export default function Home() {
   const [application, setApplication] = useState<Application | null>(null);
   const [trackerOpen, setTrackerOpen] = useState(false);
   const [interviewPrep, setInterviewPrep] = useState<InterviewQuestion[] | null>(null);
+  const [bulletSuggestions, setBulletSuggestions] = useState<BulletSuggestion[] | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
   const jobInput = useRef<HTMLInputElement>(null);
 
@@ -56,6 +58,7 @@ export default function Home() {
     setError("");
     setAnalysis(null);
     setInterviewPrep(null);
+    setBulletSuggestions(null);
 
     if (!acceptedTypes.includes(file.type) || ![".pdf", ".docx", ".txt"].some((extension) => file.name.toLowerCase().endsWith(extension))) {
       setError(`Use a ${acceptedLabels} file.`);
@@ -99,12 +102,14 @@ export default function Home() {
     }
     setAnalysis(null);
     setInterviewPrep(null);
+    setBulletSuggestions(null);
   }
 
   function analyze() {
     if (!canAnalyze) return;
     setAnalysis(analyzeMatch(resumeText, jobText));
     setInterviewPrep(null);
+    setBulletSuggestions(null);
   }
 
   return (
@@ -158,7 +163,7 @@ export default function Home() {
               error={resumeError}
               dragging={dragging === "resume"}
               inputRef={resumeInput}
-              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); setInterviewPrep(null); }}
+              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); }}
               onFile={(file) => void addFile("resume", file)}
               onDrop={(event) => handleDrop("resume", event)}
               onDragStart={() => setDragging("resume")}
@@ -176,7 +181,7 @@ export default function Home() {
               error={jobError}
               dragging={dragging === "job"}
               inputRef={jobInput}
-              onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); setInterviewPrep(null); }}
+              onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); }}
               onFile={(file) => void addFile("job", file)}
               onDrop={(event) => handleDrop("job", event)}
               onDragStart={() => setDragging("job")}
@@ -192,9 +197,10 @@ export default function Home() {
             <button className="primary-button" type="button" disabled={!canAnalyze} onClick={analyze}>Run match analysis <span aria-hidden="true">→</span></button>
           </div>
 
-          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} />}
+          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} />}
           {(trackerOpen || application) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} onSave={(nextApplication) => { setApplication(nextApplication); setTrackerOpen(false); window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication)); }} onClose={() => setTrackerOpen(false)} />}
           {interviewPrep && <InterviewPrepPanel questions={interviewPrep} onClose={() => setInterviewPrep(null)} />}
+          {bulletSuggestions && <BulletSuggestionsPanel suggestions={bulletSuggestions} onClose={() => setBulletSuggestions(null)} />}
 
           <footer className="page-footer"><span>Built for thoughtful applications.</span><span>PDF, DOCX, and TXT up to 10 MB</span></footer>
         </div>
@@ -203,7 +209,7 @@ export default function Home() {
   );
 }
 
-function AnalysisPanel({ result, onEdit, onSave, onPrep }: { result: MatchResult; onEdit: () => void; onSave: () => void; onPrep: () => void }) {
+function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets }: { result: MatchResult; onEdit: () => void; onSave: () => void; onPrep: () => void; onBullets: () => void }) {
   return (
     <section className="analysis-panel" aria-live="polite">
       <div className="analysis-header">
@@ -218,7 +224,17 @@ function AnalysisPanel({ result, onEdit, onSave, onPrep }: { result: MatchResult
         <div><h3>Evidence from your resume</h3>{result.evidence.length ? result.evidence.map((item) => <p className="evidence-item" key={item}>{item}</p>) : <p className="empty-analysis">Add more detail to your resume to create evidence.</p>}</div>
         <div><h3>Grounded suggestions</h3>{result.suggestions.length ? result.suggestions.map((item) => <p className="evidence-item suggestion" key={item}>{item}</p>) : <p className="empty-analysis">Your sources are aligned. Review the wording before applying.</p>}</div>
       </div>
-      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="prep-button" type="button" onClick={onPrep}>Prep interview <span>↗</span></button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
+      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="prep-button" type="button" onClick={onBullets}>Tailor bullets <span>↗</span></button><button className="prep-button" type="button" onClick={onPrep}>Prep interview <span>↗</span></button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
+    </section>
+  );
+}
+
+function BulletSuggestionsPanel({ suggestions, onClose }: { suggestions: BulletSuggestion[]; onClose: () => void }) {
+  return (
+    <section className="bullet-panel" aria-live="polite">
+      <div className="bullet-header"><div><p className="section-kicker">Resume workshop</p><h2>Make the fit easier to see.</h2><p>These edits sharpen wording around skills already found in your resume. Review every line before using it.</p></div><button className="edit-analysis" type="button" onClick={onClose}>Close workshop</button></div>
+      {suggestions.length ? <div className="bullet-list">{suggestions.map((suggestion, index) => <article className="bullet-card" key={suggestion.original}><div className="bullet-card-top"><span>0{index + 1}</span><b>Supports {suggestion.supports}</b></div><div className="bullet-version"><span>Original</span><p>{suggestion.original}</p></div><div className="bullet-arrow">↓</div><label className="bullet-version suggested"><span>Suggested wording</span><textarea defaultValue={suggestion.suggested} rows={3} aria-label={`Suggested wording ${index + 1}`} /></label><button type="button" className="practice-button">Keep this version <span>✓</span></button></article>)}</div> : <div className="empty-bullets"><strong>No matching bullet lines found yet.</strong><p>Add project or experience bullets to your resume, then run the analysis again.</p></div>}
+      <div className="bullet-footer"><span><span className="hint-mark">i</span> Matchline never adds metrics, tools, or accomplishments you did not provide.</span><button className="track-button" type="button" onClick={onClose}>Back to match <span>←</span></button></div>
     </section>
   );
 }
