@@ -31,6 +31,7 @@ export default function Home() {
   const [dragging, setDragging] = useState<SourceKind | null>(null);
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
   const [application, setApplication] = useState<Application | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [trackerOpen, setTrackerOpen] = useState(false);
   const [interviewPrep, setInterviewPrep] = useState<InterviewQuestion[] | null>(null);
   const [bulletSuggestions, setBulletSuggestions] = useState<BulletSuggestion[] | null>(null);
@@ -45,6 +46,7 @@ export default function Home() {
     const hydrationTimer = window.setTimeout(() => {
       const saved = window.localStorage.getItem("matchline-application");
       if (saved) setApplication(JSON.parse(saved) as Application);
+      setHydrated(true);
     }, 0);
     return () => window.clearTimeout(hydrationTimer);
   }, []);
@@ -122,7 +124,7 @@ export default function Home() {
         </div>
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <a className="nav-item active" href="#upload"><span className="nav-icon">+</span>New match</a>
-          <a className="nav-item" href="#applications"><span className="nav-icon">□</span>Applications <span className="nav-count">{application ? "1" : "0"}</span></a>
+          <a className="nav-item" href="#applications"><span className="nav-icon">□</span>Applications <span className="nav-count">{hydrated && application ? "1" : "0"}</span></a>
           <a className="nav-item" href="#library"><span className="nav-icon">▤</span>Resume library</a>
         </nav>
         <div className="sidebar-footer">
@@ -198,7 +200,7 @@ export default function Home() {
           </div>
 
           {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} />}
-          {(trackerOpen || application) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} onSave={(nextApplication) => { setApplication(nextApplication); setTrackerOpen(false); window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication)); }} onClose={() => setTrackerOpen(false)} />}
+          {(trackerOpen || (hydrated && application)) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} onSave={(nextApplication) => { setApplication(nextApplication); setTrackerOpen(false); window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication)); }} onClose={() => setTrackerOpen(false)} />}
           {interviewPrep && <InterviewPrepPanel questions={interviewPrep} onClose={() => setInterviewPrep(null)} />}
           {bulletSuggestions && <BulletSuggestionsPanel suggestions={bulletSuggestions} onClose={() => setBulletSuggestions(null)} />}
 
