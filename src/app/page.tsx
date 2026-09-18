@@ -2,8 +2,10 @@
 
 import { DragEvent, useRef, useState } from "react";
 import { analyzeMatch, MatchResult } from "@/lib/match";
+import { extractText } from "@/lib/extract";
 
 type SourceKind = "resume" | "job";
+type SourceStatus = "idle" | "extracting" | "ready";
 
 const acceptedTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
 const acceptedLabels = ".pdf, .docx, or .txt";
@@ -20,19 +22,23 @@ export default function Home() {
   const [jobText, setJobText] = useState("");
   const [resumeError, setResumeError] = useState("");
   const [jobError, setJobError] = useState("");
+  const [resumeStatus, setResumeStatus] = useState<SourceStatus>("idle");
+  const [jobStatus, setJobStatus] = useState<SourceStatus>("idle");
   const [dragging, setDragging] = useState<SourceKind | null>(null);
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
   const jobInput = useRef<HTMLInputElement>(null);
 
-  const hasResume = Boolean(resumeFile || resumeText.trim());
-  const hasJob = Boolean(jobFile || jobText.trim());
+  const hasResume = Boolean(resumeText.trim()) && resumeStatus !== "extracting";
+  const hasJob = Boolean(jobText.trim()) && jobStatus !== "extracting";
   const canAnalyze = hasResume && hasJob;
 
-  function addFile(kind: SourceKind, file?: File) {
+  async function addFile(kind: SourceKind, file?: File) {
     if (!file) return;
     const setError = kind === "resume" ? setResumeError : setJobError;
     const setFile = kind === "resume" ? setResumeFile : setJobFile;
+    const setText = kind === "resume" ? setResumeText : setJobText;
+    const setStatus = kind === "resume" ? setResumeStatus : setJobStatus;
     setError("");
     setAnalysis(null);
 
@@ -45,6 +51,17 @@ export default function Home() {
       return;
     }
     setFile(file);
+    setText("");
+    setStatus("extracting");
+    try {
+      const extractedText = (await extractText(file)).trim();
+      if (!extractedText) throw new Error("No selectable text was found.");
+      setText(extractedText);
+      setStatus("ready");
+    } catch {
+      setStatus("idle");
+      setError("We could not extract readable text from this file. Try pasting the text instead.");
+    }
   }
 
   function handleDrop(kind: SourceKind, event: DragEvent<HTMLDivElement>) {
@@ -56,9 +73,13 @@ export default function Home() {
   function removeFile(kind: SourceKind) {
     if (kind === "resume") {
       setResumeFile(null);
+      setResumeText("");
+      setResumeStatus("idle");
       if (resumeInput.current) resumeInput.current.value = "";
     } else {
       setJobFile(null);
+      setJobText("");
+      setJobStatus("idle");
       if (jobInput.current) jobInput.current.value = "";
     }
     setAnalysis(null);
@@ -121,12 +142,13 @@ export default function Home() {
               dragging={dragging === "resume"}
               inputRef={resumeInput}
               onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); }}
-              onFile={(file) => addFile("resume", file)}
+              onFile={(file) => void addFile("resume", file)}
               onDrop={(event) => handleDrop("resume", event)}
               onDragStart={() => setDragging("resume")}
               onDragEnd={() => setDragging(null)}
               onBrowse={() => resumeInput.current?.click()}
               onRemove={() => removeFile("resume")}
+              status={resumeStatus}
             />
             <SourceCard
               kind="job"
@@ -138,12 +160,13 @@ export default function Home() {
               dragging={dragging === "job"}
               inputRef={jobInput}
               onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); }}
-              onFile={(file) => addFile("job", file)}
+              onFile={(file) => void addFile("job", file)}
               onDrop={(event) => handleDrop("job", event)}
               onDragStart={() => setDragging("job")}
               onDragEnd={() => setDragging(null)}
               onBrowse={() => jobInput.current?.click()}
               onRemove={() => removeFile("job")}
+              status={jobStatus}
             />
           </div>
 
@@ -197,9 +220,10 @@ type SourceCardProps = {
   onDragEnd: () => void;
   onBrowse: () => void;
   onRemove: () => void;
+  status: SourceStatus;
 };
 
-function SourceCard({ kind, title, description, file, text, error, dragging, inputRef, onTextChange, onFile, onDrop, onDragStart, onDragEnd, onBrowse, onRemove }: SourceCardProps) {
+function SourceCard({ kind, title, description, file, text, error, dragging, inputRef, onTextChange, onFile, onDrop, onDragStart, onDragEnd, onBrowse, onRemove, status }: SourceCardProps) {
   const hasSource = Boolean(file || text.trim());
   return (
     <article className={`source-card ${kind} ${dragging ? "is-dragging" : ""}`}>
@@ -207,7 +231,7 @@ function SourceCard({ kind, title, description, file, text, error, dragging, inp
       <p className="card-description">{description}</p>
       <div className="source-tabs"><span className="tab-active">Upload file</span><span>Paste text</span></div>
       {file ? (
-        <div className="file-ready"><div className="file-type">{file.name.split(".").pop()?.toUpperCase()}</div><div className="file-meta"><strong>{file.name}</strong><span>{formatSize(file.size)} · Ready to extract</span></div><button className="remove-button" type="button" onClick={onRemove} aria-label={`Remove ${file.name}`}>×</button></div>
+        <div className="file-ready"><div className="file-type">{file.name.split(".").pop()?.toUpperCase()}</div><div className="file-meta"><strong>{file.name}</strong><span>{formatSize(file.size)} · {status === "extracting" ? "Extracting text..." : "Text ready to analyze"}</span></div><button className="remove-button" type="button" onClick={onRemove} aria-label={`Remove ${file.name}`}>×</button></div>
       ) : (
         <div className={`drop-zone ${hasSource ? "has-text" : ""}`} onDrop={onDrop} onDragOver={(event) => { event.preventDefault(); onDragStart(); }} onDragLeave={onDragEnd}>
           <input ref={inputRef} type="file" accept=".pdf,.docx,.txt" hidden onChange={(event) => onFile(event.target.files?.[0])} />
