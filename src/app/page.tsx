@@ -232,10 +232,20 @@ function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets }: { result: 
 }
 
 function BulletSuggestionsPanel({ suggestions, onClose }: { suggestions: BulletSuggestion[]; onClose: () => void }) {
+  const [drafts, setDrafts] = useState(() => suggestions.map((suggestion) => suggestion.suggested));
+  const [kept, setKept] = useState<number[]>([]);
+  const [copied, setCopied] = useState<number | null>(null);
+
+  async function copySuggestion(index: number) {
+    await navigator.clipboard.writeText(drafts[index]);
+    setCopied(index);
+    window.setTimeout(() => setCopied((current) => current === index ? null : current), 1600);
+  }
+
   return (
     <section className="bullet-panel" aria-live="polite">
       <div className="bullet-header"><div><p className="section-kicker">Resume workshop</p><h2>Make the fit easier to see.</h2><p>These edits sharpen wording around skills already found in your resume. Review every line before using it.</p></div><button className="edit-analysis" type="button" onClick={onClose}>Close workshop</button></div>
-      {suggestions.length ? <div className="bullet-list">{suggestions.map((suggestion, index) => <article className="bullet-card" key={suggestion.original}><div className="bullet-card-top"><span>0{index + 1}</span><b>Supports {suggestion.supports}</b></div><div className="bullet-version"><span>Original</span><p>{suggestion.original}</p></div><div className="bullet-arrow">↓</div><label className="bullet-version suggested"><span>Suggested wording</span><textarea defaultValue={suggestion.suggested} rows={3} aria-label={`Suggested wording ${index + 1}`} /></label><button type="button" className="practice-button">Keep this version <span>✓</span></button></article>)}</div> : <div className="empty-bullets"><strong>No matching bullet lines found yet.</strong><p>Add project or experience bullets to your resume, then run the analysis again.</p></div>}
+      {suggestions.length ? <div className="bullet-list">{suggestions.map((suggestion, index) => { const isKept = kept.includes(index); return <article className={`bullet-card ${isKept ? "is-kept" : ""}`} key={suggestion.original}><div className="bullet-card-top"><span>0{index + 1}</span><b>Supports {suggestion.supports}</b></div><div className="bullet-version"><span>Original</span><p>{suggestion.original}</p></div><div className="bullet-arrow">↓</div><label className="bullet-version suggested"><span>Suggested wording</span><textarea value={drafts[index]} onChange={(event) => setDrafts((current) => current.map((draft, draftIndex) => draftIndex === index ? event.target.value : draft))} rows={3} aria-label={`Suggested wording ${index + 1}`} /></label><div className="bullet-actions"><button type="button" className="practice-button" aria-pressed={isKept} onClick={() => setKept((current) => isKept ? current.filter((keptIndex) => keptIndex !== index) : [...current, index])}>{isKept ? "Kept for review" : "Keep this version"} <span>{isKept ? "✓" : "+"}</span></button><button type="button" className="copy-button" onClick={() => void copySuggestion(index)}>{copied === index ? "Copied" : "Copy draft"}</button></div></article>; })}</div> : <div className="empty-bullets"><strong>No matching bullet lines found yet.</strong><p>Add project or experience bullets to your resume, then run the analysis again.</p></div>}
       <div className="bullet-footer"><span><span className="hint-mark">i</span> Matchline never adds metrics, tools, or accomplishments you did not provide.</span><button className="track-button" type="button" onClick={onClose}>Back to match <span>←</span></button></div>
     </section>
   );
