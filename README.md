@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Matchline
+
+Matchline is a privacy-conscious resume and job matching workspace for thoughtful applications. Upload a resume and job description, compare the skills found in each source, prepare for interviews, tailor resume bullets, and save the application for follow-up.
+
+> This project is designed as a portfolio application. Its match score is a directional comparison of text, not a hiring prediction.
+
+## Product Flow
+
+1. **Upload sources** - Accept PDF, DOCX, and TXT files or paste text directly.
+2. **Review extraction** - Keep extracted content editable and show clear loading and failure states.
+3. **Analyze the match** - See a transparent score, matched skills, missing skills, and evidence from the resume.
+4. **Tailor bullets** - Review editable wording suggestions tied to skills already found in the resume.
+5. **Prepare for interviews** - Practice experience, technical, and skill-gap questions grounded in the current sources.
+6. **Track the application** - Save role, company, deadline, status, next action, notes, and match score locally.
+
+## Technical Highlights
+
+- Next.js 16 App Router with React and TypeScript
+- Client-side PDF extraction with PDF.js
+- Client-side DOCX extraction with Mammoth
+- Deterministic, explainable skill matching in `src/lib/match.ts`
+- Grounded interview prompts in `src/lib/interview.ts`
+- Resume bullet suggestions in `src/lib/bullets.ts`
+- Browser-local application persistence with hydration-safe loading
+- Responsive interface with explicit empty, loading, validation, and error states
+- No API keys or external AI provider required for the current demo
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Run the checks used before pushing changes:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+```
 
-## Learn More
+## Privacy Notes
 
-To learn more about Next.js, take a look at the following resources:
+- Documents are processed in the browser for the current demo flow.
+- The application tracker is stored in browser `localStorage`.
+- Raw documents and personal information are not sent to a server by this version.
+- Generated suggestions are intentionally framed as drafts and must be reviewed by the user.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Current Scope and Future Work
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The current matching engine uses a curated skill vocabulary and text comparison so the demo is deterministic and inspectable. Future iterations could add authenticated server storage, richer resume parsing, configurable skill taxonomies, application history, and an optional replaceable AI provider with explicit evidence and consent controls.
 
-## Deploy on Vercel
+## Portfolio Summary
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Matchline demonstrates full-stack product thinking through document processing, explainable matching, responsive UX, privacy-aware client state, and user-controlled AI-adjacent workflows. The implementation favors clear evidence and editable output over opaque recommendations.
