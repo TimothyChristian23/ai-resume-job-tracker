@@ -6,6 +6,7 @@ import { extractText } from "@/lib/extract";
 import { buildInterviewPrep, InterviewQuestion } from "@/lib/interview";
 import { buildBulletSuggestions, BulletSuggestion } from "@/lib/bullets";
 import { buildJobBrief } from "@/lib/job-brief";
+import { buildApplicationPack } from "@/lib/application-pack";
 
 type SourceKind = "resume" | "job";
 type SourceStatus = "idle" | "extracting" | "ready";
@@ -37,6 +38,7 @@ export default function Home() {
   const [interviewPrep, setInterviewPrep] = useState<InterviewQuestion[] | null>(null);
   const [bulletSuggestions, setBulletSuggestions] = useState<BulletSuggestion[] | null>(null);
   const [jobBrief, setJobBrief] = useState<string | null>(null);
+  const [applicationPack, setApplicationPack] = useState<string | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
   const jobInput = useRef<HTMLInputElement>(null);
 
@@ -109,6 +111,7 @@ export default function Home() {
     setInterviewPrep(null);
     setBulletSuggestions(null);
     setJobBrief(null);
+    setApplicationPack(null);
   }
 
   function analyze() {
@@ -117,6 +120,7 @@ export default function Home() {
     setInterviewPrep(null);
     setBulletSuggestions(null);
     setJobBrief(null);
+    setApplicationPack(null);
   }
 
   return (
@@ -170,7 +174,7 @@ export default function Home() {
               error={resumeError}
               dragging={dragging === "resume"}
               inputRef={resumeInput}
-              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); setJobBrief(null); }}
+              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); setJobBrief(null); setApplicationPack(null); }}
               onFile={(file) => void addFile("resume", file)}
               onDrop={(event) => handleDrop("resume", event)}
               onDragStart={() => setDragging("resume")}
@@ -188,7 +192,7 @@ export default function Home() {
               error={jobError}
               dragging={dragging === "job"}
               inputRef={jobInput}
-              onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); setJobBrief(null); }}
+              onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); setJobBrief(null); setApplicationPack(null); }}
               onFile={(file) => void addFile("job", file)}
               onDrop={(event) => handleDrop("job", event)}
               onDragStart={() => setDragging("job")}
@@ -204,11 +208,12 @@ export default function Home() {
             <button className="primary-button" type="button" disabled={!canAnalyze} onClick={analyze}>Run match analysis <span aria-hidden="true">→</span></button>
           </div>
 
-          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} onBrief={() => setJobBrief(buildJobBrief(analysis))} />}
+          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} onBrief={() => setJobBrief(buildJobBrief(analysis))} onPack={() => setApplicationPack(buildApplicationPack(analysis, buildInterviewPrep(analysis, resumeText)))} />}
           {(trackerOpen || (hydrated && application)) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} onSave={(nextApplication) => { setApplication(nextApplication); setTrackerOpen(false); window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication)); }} onClose={() => setTrackerOpen(false)} />}
           {interviewPrep && <InterviewPrepPanel questions={interviewPrep} onClose={() => setInterviewPrep(null)} />}
           {bulletSuggestions && <BulletSuggestionsPanel suggestions={bulletSuggestions} onClose={() => setBulletSuggestions(null)} />}
           {jobBrief && <JobBriefPanel brief={jobBrief} onClose={() => setJobBrief(null)} />}
+          {applicationPack && <ApplicationPackPanel pack={applicationPack} onClose={() => setApplicationPack(null)} />}
 
           <footer className="page-footer"><span>Built for thoughtful applications.</span><span>PDF, DOCX, and TXT up to 10 MB</span></footer>
         </div>
@@ -217,7 +222,7 @@ export default function Home() {
   );
 }
 
-function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets, onBrief }: { result: MatchResult; onEdit: () => void; onSave: () => void; onPrep: () => void; onBullets: () => void; onBrief: () => void }) {
+function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets, onBrief, onPack }: { result: MatchResult; onEdit: () => void; onSave: () => void; onPrep: () => void; onBullets: () => void; onBrief: () => void; onPack: () => void }) {
   return (
     <section className="analysis-panel" aria-live="polite">
       <div className="analysis-header">
@@ -232,7 +237,7 @@ function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets, onBrief }: {
         <div><h3>Evidence from your resume</h3>{result.evidence.length ? result.evidence.map((item) => <p className="evidence-item" key={item}>{item}</p>) : <p className="empty-analysis">Add more detail to your resume to create evidence.</p>}</div>
         <div><h3>Grounded suggestions</h3>{result.suggestions.length ? result.suggestions.map((item) => <p className="evidence-item suggestion" key={item}>{item}</p>) : <p className="empty-analysis">Your sources are aligned. Review the wording before applying.</p>}</div>
       </div>
-      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="prep-button" type="button" onClick={onBullets}>Tailor bullets <span>↗</span></button><button className="prep-button" type="button" onClick={onPrep}>Prep interview <span>↗</span></button><button className="prep-button" type="button" onClick={onBrief}>Job brief <span>↗</span></button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
+      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="prep-button" type="button" onClick={onBullets}>Tailor bullets <span>↗</span></button><button className="prep-button" type="button" onClick={onPrep}>Prep interview <span>↗</span></button><button className="prep-button" type="button" onClick={onBrief}>Job brief <span>↗</span></button><button className="prep-button" type="button" onClick={onPack}>Application pack <span>↗</span></button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
     </section>
   );
 }
@@ -261,6 +266,34 @@ function JobBriefPanel({ brief, onClose }: { brief: string; onClose: () => void 
       <div className="brief-header"><div><p className="section-kicker">Application brief</p><h2>Before you hit apply.</h2><p>Keep the key signals in one place so the next move is clear.</p></div><button className="edit-analysis" type="button" onClick={onClose}>Close brief</button></div>
       <div className="brief-body"><pre>{brief}</pre></div>
       <div className="brief-footer"><span><span className="hint-mark">i</span> This brief is a quick internal summary, not a claim about hiring outcomes.</span><div className="brief-actions"><button className="copy-button" type="button" onClick={() => void copyBrief()}>{copied ? "Copied" : "Copy brief"}</button><button className="track-button" type="button" onClick={downloadBrief}>Download <span>↓</span></button></div></div>
+    </section>
+  );
+}
+
+function ApplicationPackPanel({ pack, onClose }: { pack: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyPack() {
+    await navigator.clipboard.writeText(pack);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  function downloadPack() {
+    const blob = new Blob([pack], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "matchline-application-pack.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="brief-panel" aria-live="polite">
+      <div className="brief-header"><div><p className="section-kicker">Application pack</p><h2>One condensed summary.</h2><p>Everything in one place before you apply or follow up.</p></div><button className="edit-analysis" type="button" onClick={onClose}>Close pack</button></div>
+      <div className="brief-body"><pre>{pack}</pre></div>
+      <div className="brief-footer"><span><span className="hint-mark">i</span> This is a working brief for your process, not a promise of an interview.</span><div className="brief-actions"><button className="copy-button" type="button" onClick={() => void copyPack()}>{copied ? "Copied" : "Copy pack"}</button><button className="track-button" type="button" onClick={downloadPack}>Download <span>↓</span></button></div></div>
     </section>
   );
 }
