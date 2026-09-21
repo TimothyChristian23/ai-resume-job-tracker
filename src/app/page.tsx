@@ -42,6 +42,7 @@ export default function Home() {
   const [bulletSuggestions, setBulletSuggestions] = useState<BulletSuggestion[] | null>(null);
   const [jobBrief, setJobBrief] = useState<string | null>(null);
   const [applicationPack, setApplicationPack] = useState<string | null>(null);
+  const [applicationSummary, setApplicationSummary] = useState<string | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
   const jobInput = useRef<HTMLInputElement>(null);
 
@@ -132,6 +133,7 @@ export default function Home() {
     setBulletSuggestions(null);
     setJobBrief(null);
     setApplicationPack(null);
+    setApplicationSummary(null);
   }
 
   function analyze() {
@@ -141,6 +143,7 @@ export default function Home() {
     setBulletSuggestions(null);
     setJobBrief(null);
     setApplicationPack(null);
+    setApplicationSummary(null);
   }
 
   function saveCurrentResume() {
@@ -269,11 +272,12 @@ export default function Home() {
           }} onSelectSavedApplication={(nextApplication) => {
             setApplication(nextApplication);
             setTrackerOpen(false);
-          }} onClose={() => setTrackerOpen(false)} />}
+          }} onExportSummary={(nextSummary) => setApplicationSummary(nextSummary)} onClose={() => setTrackerOpen(false)} />}
           {interviewPrep && <InterviewPrepPanel questions={interviewPrep} onClose={() => setInterviewPrep(null)} />}
           {bulletSuggestions && <BulletSuggestionsPanel suggestions={bulletSuggestions} onClose={() => setBulletSuggestions(null)} />}
           {jobBrief && <JobBriefPanel brief={jobBrief} onClose={() => setJobBrief(null)} />}
           {applicationPack && <ApplicationPackPanel pack={applicationPack} onClose={() => setApplicationPack(null)} />}
+          {applicationSummary && <ApplicationSummaryPanel summary={applicationSummary} onClose={() => setApplicationSummary(null)} />}
 
           <footer className="page-footer"><span>Built for thoughtful applications.</span><span>PDF, DOCX, and TXT up to 10 MB</span></footer>
         </div>
@@ -371,6 +375,34 @@ function ApplicationPackPanel({ pack, onClose }: { pack: string; onClose: () => 
   );
 }
 
+function ApplicationSummaryPanel({ summary, onClose }: { summary: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copySummary() {
+    await navigator.clipboard.writeText(summary);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  function downloadSummary() {
+    const blob = new Blob([summary], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "matchline-application-summary.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="brief-panel" aria-live="polite">
+      <div className="brief-header"><div><p className="section-kicker">Application summary</p><h2>Full record for this role.</h2><p>One clean summary you can save, email, or reuse before sending the application.</p></div><button className="edit-analysis" type="button" onClick={onClose}>Close summary</button></div>
+      <div className="brief-body"><pre>{summary}</pre></div>
+      <div className="brief-footer"><span><span className="hint-mark">i</span> This is a working record of your application prep, not an external claim.</span><div className="brief-actions"><button className="copy-button" type="button" onClick={() => void copySummary()}>{copied ? "Copied" : "Copy summary"}</button><button className="track-button" type="button" onClick={downloadSummary}>Download <span>↓</span></button></div></div>
+    </section>
+  );
+}
+
 function BulletSuggestionsPanel({ suggestions, onClose }: { suggestions: BulletSuggestion[]; onClose: () => void }) {
   const [drafts, setDrafts] = useState(() => suggestions.map((suggestion) => suggestion.suggested));
   const [kept, setKept] = useState<number[]>([]);
@@ -401,7 +433,20 @@ function InterviewPrepPanel({ questions, onClose }: { questions: InterviewQuesti
   );
 }
 
-function ApplicationTracker({ application, score, savedApplications, onSave, onSelectSavedApplication, onClose }: { application: Application | null; score: number; savedApplications: Application[]; onSave: (application: Application) => void; onSelectSavedApplication: (application: Application) => void; onClose: () => void }) {
+function buildApplicationSummary(application: Application, score: number) {
+  return [
+    "Application summary",
+    `Role: ${application.role || "Untitled role"}`,
+    `Company: ${application.company || "Company not added"}`,
+    `Status: ${application.status}`,
+    `Match score: ${score}/100`,
+    `Deadline: ${application.deadline || "Not set"}`,
+    `Next action: ${application.nextAction || "No next step recorded"}`,
+    `Notes: ${application.notes || "No notes yet."}`,
+  ].join("\n");
+}
+
+function ApplicationTracker({ application, score, savedApplications, onSave, onSelectSavedApplication, onExportSummary, onClose }: { application: Application | null; score: number; savedApplications: Application[]; onSave: (application: Application) => void; onSelectSavedApplication: (application: Application) => void; onExportSummary: (summary: string) => void; onClose: () => void }) {
   const [draft, setDraft] = useState<Application>(application ?? { role: "", company: "", deadline: "", status: "Saved", nextAction: "", notes: "", score });
   const [editing, setEditing] = useState(!application);
   const update = (field: keyof Application, value: string) => setDraft((current) => ({ ...current, [field]: value }));
@@ -411,7 +456,7 @@ function ApplicationTracker({ application, score, savedApplications, onSave, onS
     <section className="tracker-panel" id="applications">
       <div className="tracker-header"><div><p className="section-kicker">Step 03 <span>of 03</span></p><h2>Application tracker</h2><p>Keep the next move visible while the match is still fresh.</p></div>{application && <span className="tracker-score">{application.score}<small>/100 match</small></span>}</div>
       {application && !editing ? (
-        <div className="application-card"><div className="application-main"><span className="application-status">{application.status}</span><h3>{application.role || "Untitled role"}</h3><strong>{application.company || "Company not added"}</strong>{application.deadline && <span className="deadline">Deadline {application.deadline}</span>}</div><div className="application-details"><div><span>Next action</span><strong>{application.nextAction || "Add a next action"}</strong></div><div><span>Notes</span><p>{application.notes || "No notes yet."}</p></div></div><button type="button" className="edit-analysis" onClick={() => setEditing(true)}>Edit application</button></div>
+        <div className="application-card"><div className="application-main"><span className="application-status">{application.status}</span><h3>{application.role || "Untitled role"}</h3><strong>{application.company || "Company not added"}</strong>{application.deadline && <span className="deadline">Deadline {application.deadline}</span>}</div><div className="application-details"><div><span>Next action</span><strong>{application.nextAction || "Add a next action"}</strong></div><div><span>Notes</span><p>{application.notes || "No notes yet."}</p></div></div><div className="application-actions"><button type="button" className="edit-analysis" onClick={() => setEditing(true)}>Edit application</button><button type="button" className="secondary-button small-button" onClick={() => onExportSummary(buildApplicationSummary(application, score))}>Export summary <span>↓</span></button></div></div>
       ) : (
         <form className="tracker-form" onSubmit={(event) => { event.preventDefault(); saveDraft(); }}>
           <label>Role<input value={draft.role} onChange={(event) => update("role", event.target.value)} placeholder="Frontend Engineer" required /></label>
