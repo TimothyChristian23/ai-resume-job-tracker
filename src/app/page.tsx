@@ -5,6 +5,7 @@ import { analyzeMatch, MatchResult } from "@/lib/match";
 import { extractText } from "@/lib/extract";
 import { buildInterviewPrep, InterviewQuestion } from "@/lib/interview";
 import { buildBulletSuggestions, BulletSuggestion } from "@/lib/bullets";
+import { buildJobBrief } from "@/lib/job-brief";
 
 type SourceKind = "resume" | "job";
 type SourceStatus = "idle" | "extracting" | "ready";
@@ -236,21 +237,6 @@ function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets, onBrief }: {
   );
 }
 
-function buildJobBrief(result: MatchResult) {
-  const strongestSkills = result.matchedSkills.slice(0, 3).join(", ");
-  const gapSkills = result.missingSkills.slice(0, 2).join(", ");
-  const summary = result.score >= 75 ? "This role looks like a strong fit based on your current evidence." : result.score >= 50 ? "This role is promising with a few targeted improvements." : "This role may need more tailored positioning before you apply.";
-
-  return [
-    "Job brief",
-    `Overall fit: ${result.score}/100`,
-    summary,
-    `Strongest signals: ${strongestSkills || "No strong matches detected yet."}`,
-    `What to make more visible: ${gapSkills || "No clear gaps detected yet."}`,
-    "Recommended next move: tighten your resume bullets, prep for the key interview question, and save this application for follow-up.",
-  ].join("\n");
-}
-
 function JobBriefPanel({ brief, onClose }: { brief: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
@@ -260,11 +246,21 @@ function JobBriefPanel({ brief, onClose }: { brief: string; onClose: () => void 
     window.setTimeout(() => setCopied(false), 1400);
   }
 
+  function downloadBrief() {
+    const blob = new Blob([brief], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "matchline-job-brief.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section className="brief-panel" aria-live="polite">
       <div className="brief-header"><div><p className="section-kicker">Application brief</p><h2>Before you hit apply.</h2><p>Keep the key signals in one place so the next move is clear.</p></div><button className="edit-analysis" type="button" onClick={onClose}>Close brief</button></div>
       <div className="brief-body"><pre>{brief}</pre></div>
-      <div className="brief-footer"><span><span className="hint-mark">i</span> This brief is a quick internal summary, not a claim about hiring outcomes.</span><button className="track-button" type="button" onClick={() => void copyBrief()}>{copied ? "Copied" : "Copy brief"} <span>→</span></button></div>
+      <div className="brief-footer"><span><span className="hint-mark">i</span> This brief is a quick internal summary, not a claim about hiring outcomes.</span><div className="brief-actions"><button className="copy-button" type="button" onClick={() => void copyBrief()}>{copied ? "Copied" : "Copy brief"}</button><button className="track-button" type="button" onClick={downloadBrief}>Download <span>↓</span></button></div></div>
     </section>
   );
 }
