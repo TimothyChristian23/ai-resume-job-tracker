@@ -33,6 +33,7 @@ export default function Home() {
   const [dragging, setDragging] = useState<SourceKind | null>(null);
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
   const [application, setApplication] = useState<Application | null>(null);
+  const [savedApplications, setSavedApplications] = useState<Application[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [trackerOpen, setTrackerOpen] = useState(false);
   const [interviewPrep, setInterviewPrep] = useState<InterviewQuestion[] | null>(null);
@@ -48,8 +49,20 @@ export default function Home() {
 
   useEffect(() => {
     const hydrationTimer = window.setTimeout(() => {
-      const saved = window.localStorage.getItem("matchline-application");
-      if (saved) setApplication(JSON.parse(saved) as Application);
+      const legacy = window.localStorage.getItem("matchline-application");
+      const array = window.localStorage.getItem("matchline-applications");
+
+      if (array) {
+        const parsed = JSON.parse(array) as Application[];
+        setSavedApplications(parsed);
+        const latest = parsed[0] ?? null;
+        if (latest) setApplication(latest);
+      } else if (legacy) {
+        const parsed = JSON.parse(legacy) as Application;
+        setApplication(parsed);
+        setSavedApplications([parsed]);
+      }
+
       setHydrated(true);
     }, 0);
     return () => window.clearTimeout(hydrationTimer);
@@ -133,7 +146,7 @@ export default function Home() {
         </div>
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <a className="nav-item active" href="#upload"><span className="nav-icon">+</span>New match</a>
-          <a className="nav-item" href="#applications"><span className="nav-icon">□</span>Applications <span className="nav-count">{hydrated && application ? "1" : "0"}</span></a>
+          <a className="nav-item" href="#applications"><span className="nav-icon">□</span>Applications <span className="nav-count">{hydrated ? String(savedApplications.length) : "0"}</span></a>
           <a className="nav-item" href="#library"><span className="nav-icon">▤</span>Resume library</a>
         </nav>
         <div className="sidebar-footer">
@@ -209,7 +222,17 @@ export default function Home() {
           </div>
 
           {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} onBrief={() => setJobBrief(buildJobBrief(analysis))} onPack={() => setApplicationPack(buildApplicationPack(analysis, buildInterviewPrep(analysis, resumeText)))} />}
-          {(trackerOpen || (hydrated && application)) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} onSave={(nextApplication) => { setApplication(nextApplication); setTrackerOpen(false); window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication)); }} onClose={() => setTrackerOpen(false)} />}
+          {(trackerOpen || (hydrated && application)) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} savedApplications={savedApplications} onSave={(nextApplication) => {
+            const nextSaved = [nextApplication, ...savedApplications.filter((entry) => !(entry.role === nextApplication.role && entry.company === nextApplication.company && entry.deadline === nextApplication.deadline))];
+            setApplication(nextApplication);
+            setSavedApplications(nextSaved);
+            setTrackerOpen(false);
+            window.localStorage.setItem("matchline-applications", JSON.stringify(nextSaved));
+            window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication));
+          }} onSelectSavedApplication={(nextApplication) => {
+            setApplication(nextApplication);
+            setTrackerOpen(false);
+          }} onClose={() => setTrackerOpen(false)} />}
           {interviewPrep && <InterviewPrepPanel questions={interviewPrep} onClose={() => setInterviewPrep(null)} />}
           {bulletSuggestions && <BulletSuggestionsPanel suggestions={bulletSuggestions} onClose={() => setBulletSuggestions(null)} />}
           {jobBrief && <JobBriefPanel brief={jobBrief} onClose={() => setJobBrief(null)} />}
@@ -328,7 +351,7 @@ function InterviewPrepPanel({ questions, onClose }: { questions: InterviewQuesti
   );
 }
 
-function ApplicationTracker({ application, score, onSave, onClose }: { application: Application | null; score: number; onSave: (application: Application) => void; onClose: () => void }) {
+function ApplicationTracker({ application, score, savedApplications, onSave, onSelectSavedApplication, onClose }: { application: Application | null; score: number; savedApplications: Application[]; onSave: (application: Application) => void; onSelectSavedApplication: (application: Application) => void; onClose: () => void }) {
   const [draft, setDraft] = useState<Application>(application ?? { role: "", company: "", deadline: "", status: "Saved", nextAction: "", notes: "", score });
   const [editing, setEditing] = useState(!application);
   const update = (field: keyof Application, value: string) => setDraft((current) => ({ ...current, [field]: value }));
@@ -349,6 +372,17 @@ function ApplicationTracker({ application, score, onSave, onClose }: { applicati
           <label className="wide-field">Notes<textarea value={draft.notes} onChange={(event) => update("notes", event.target.value)} placeholder="What do you want to remember?" rows={3} /></label>
           <div className="tracker-form-actions"><button type="button" className="edit-analysis" onClick={onClose}>Cancel</button><button className="track-button" type="submit">Save application <span>→</span></button></div>
         </form>
+      )}
+      {savedApplications.length > 0 && (
+        <div className="saved-applications">
+          <div className="saved-header"><h3>Saved roles</h3><span>{savedApplications.length}</span></div>
+          <div className="saved-list">{savedApplications.map((entry) => (
+            <button key={`${entry.role}-${entry.company}-${entry.deadline || "no-deadline"}`} type="button" className="saved-entry" onClick={() => onSelectSavedApplication(entry)}>
+              <div><strong>{entry.role || "Untitled role"}</strong><span>{entry.company || "Company not added"}</span></div>
+              <div className="saved-meta"><span>{entry.status}</span><b>{entry.score}</b></div>
+            </button>
+          ))}</div>
+        </div>
       )}
     </section>
   );
