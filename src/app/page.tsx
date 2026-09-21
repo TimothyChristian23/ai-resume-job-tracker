@@ -35,6 +35,7 @@ export default function Home() {
   const [trackerOpen, setTrackerOpen] = useState(false);
   const [interviewPrep, setInterviewPrep] = useState<InterviewQuestion[] | null>(null);
   const [bulletSuggestions, setBulletSuggestions] = useState<BulletSuggestion[] | null>(null);
+  const [jobBrief, setJobBrief] = useState<string | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
   const jobInput = useRef<HTMLInputElement>(null);
 
@@ -61,6 +62,7 @@ export default function Home() {
     setAnalysis(null);
     setInterviewPrep(null);
     setBulletSuggestions(null);
+    setJobBrief(null);
 
     if (!acceptedTypes.includes(file.type) || ![".pdf", ".docx", ".txt"].some((extension) => file.name.toLowerCase().endsWith(extension))) {
       setError(`Use a ${acceptedLabels} file.`);
@@ -105,6 +107,7 @@ export default function Home() {
     setAnalysis(null);
     setInterviewPrep(null);
     setBulletSuggestions(null);
+    setJobBrief(null);
   }
 
   function analyze() {
@@ -112,6 +115,7 @@ export default function Home() {
     setAnalysis(analyzeMatch(resumeText, jobText));
     setInterviewPrep(null);
     setBulletSuggestions(null);
+    setJobBrief(null);
   }
 
   return (
@@ -165,7 +169,7 @@ export default function Home() {
               error={resumeError}
               dragging={dragging === "resume"}
               inputRef={resumeInput}
-              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); }}
+              onTextChange={(value) => { setResumeText(value); setResumeFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); setJobBrief(null); }}
               onFile={(file) => void addFile("resume", file)}
               onDrop={(event) => handleDrop("resume", event)}
               onDragStart={() => setDragging("resume")}
@@ -183,7 +187,7 @@ export default function Home() {
               error={jobError}
               dragging={dragging === "job"}
               inputRef={jobInput}
-              onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); }}
+              onTextChange={(value) => { setJobText(value); setJobFile(null); setAnalysis(null); setInterviewPrep(null); setBulletSuggestions(null); setJobBrief(null); }}
               onFile={(file) => void addFile("job", file)}
               onDrop={(event) => handleDrop("job", event)}
               onDragStart={() => setDragging("job")}
@@ -199,10 +203,11 @@ export default function Home() {
             <button className="primary-button" type="button" disabled={!canAnalyze} onClick={analyze}>Run match analysis <span aria-hidden="true">→</span></button>
           </div>
 
-          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} />}
+          {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} onBrief={() => setJobBrief(buildJobBrief(analysis))} />}
           {(trackerOpen || (hydrated && application)) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} onSave={(nextApplication) => { setApplication(nextApplication); setTrackerOpen(false); window.localStorage.setItem("matchline-application", JSON.stringify(nextApplication)); }} onClose={() => setTrackerOpen(false)} />}
           {interviewPrep && <InterviewPrepPanel questions={interviewPrep} onClose={() => setInterviewPrep(null)} />}
           {bulletSuggestions && <BulletSuggestionsPanel suggestions={bulletSuggestions} onClose={() => setBulletSuggestions(null)} />}
+          {jobBrief && <JobBriefPanel brief={jobBrief} onClose={() => setJobBrief(null)} />}
 
           <footer className="page-footer"><span>Built for thoughtful applications.</span><span>PDF, DOCX, and TXT up to 10 MB</span></footer>
         </div>
@@ -211,7 +216,7 @@ export default function Home() {
   );
 }
 
-function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets }: { result: MatchResult; onEdit: () => void; onSave: () => void; onPrep: () => void; onBullets: () => void }) {
+function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets, onBrief }: { result: MatchResult; onEdit: () => void; onSave: () => void; onPrep: () => void; onBullets: () => void; onBrief: () => void }) {
   return (
     <section className="analysis-panel" aria-live="polite">
       <div className="analysis-header">
@@ -226,7 +231,40 @@ function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets }: { result: 
         <div><h3>Evidence from your resume</h3>{result.evidence.length ? result.evidence.map((item) => <p className="evidence-item" key={item}>{item}</p>) : <p className="empty-analysis">Add more detail to your resume to create evidence.</p>}</div>
         <div><h3>Grounded suggestions</h3>{result.suggestions.length ? result.suggestions.map((item) => <p className="evidence-item suggestion" key={item}>{item}</p>) : <p className="empty-analysis">Your sources are aligned. Review the wording before applying.</p>}</div>
       </div>
-      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="prep-button" type="button" onClick={onBullets}>Tailor bullets <span>↗</span></button><button className="prep-button" type="button" onClick={onPrep}>Prep interview <span>↗</span></button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
+      <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="prep-button" type="button" onClick={onBullets}>Tailor bullets <span>↗</span></button><button className="prep-button" type="button" onClick={onPrep}>Prep interview <span>↗</span></button><button className="prep-button" type="button" onClick={onBrief}>Job brief <span>↗</span></button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
+    </section>
+  );
+}
+
+function buildJobBrief(result: MatchResult) {
+  const strongestSkills = result.matchedSkills.slice(0, 3).join(", ");
+  const gapSkills = result.missingSkills.slice(0, 2).join(", ");
+  const summary = result.score >= 75 ? "This role looks like a strong fit based on your current evidence." : result.score >= 50 ? "This role is promising with a few targeted improvements." : "This role may need more tailored positioning before you apply.";
+
+  return [
+    "Job brief",
+    `Overall fit: ${result.score}/100`,
+    summary,
+    `Strongest signals: ${strongestSkills || "No strong matches detected yet."}`,
+    `What to make more visible: ${gapSkills || "No clear gaps detected yet."}`,
+    "Recommended next move: tighten your resume bullets, prep for the key interview question, and save this application for follow-up.",
+  ].join("\n");
+}
+
+function JobBriefPanel({ brief, onClose }: { brief: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyBrief() {
+    await navigator.clipboard.writeText(brief);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  return (
+    <section className="brief-panel" aria-live="polite">
+      <div className="brief-header"><div><p className="section-kicker">Application brief</p><h2>Before you hit apply.</h2><p>Keep the key signals in one place so the next move is clear.</p></div><button className="edit-analysis" type="button" onClick={onClose}>Close brief</button></div>
+      <div className="brief-body"><pre>{brief}</pre></div>
+      <div className="brief-footer"><span><span className="hint-mark">i</span> This brief is a quick internal summary, not a claim about hiring outcomes.</span><button className="track-button" type="button" onClick={() => void copyBrief()}>{copied ? "Copied" : "Copy brief"} <span>→</span></button></div>
     </section>
   );
 }
