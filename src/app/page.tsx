@@ -11,6 +11,7 @@ import { buildApplicationPack } from "@/lib/application-pack";
 type SourceKind = "resume" | "job";
 type SourceStatus = "idle" | "extracting" | "ready";
 type ApplicationStatus = "Saved" | "Applied" | "Interview" | "Offer" | "Closed";
+type ResumeLibraryItem = { id: string; name: string; text: string; savedAt: string };
 type Application = { role: string; company: string; deadline: string; status: ApplicationStatus; nextAction: string; notes: string; score: number };
 
 const acceptedTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
@@ -34,6 +35,7 @@ export default function Home() {
   const [analysis, setAnalysis] = useState<MatchResult | null>(null);
   const [application, setApplication] = useState<Application | null>(null);
   const [savedApplications, setSavedApplications] = useState<Application[]>([]);
+  const [savedResumes, setSavedResumes] = useState<ResumeLibraryItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [trackerOpen, setTrackerOpen] = useState(false);
   const [interviewPrep, setInterviewPrep] = useState<InterviewQuestion[] | null>(null);
@@ -51,6 +53,7 @@ export default function Home() {
     const hydrationTimer = window.setTimeout(() => {
       const legacy = window.localStorage.getItem("matchline-application");
       const array = window.localStorage.getItem("matchline-applications");
+      const storedResumes = window.localStorage.getItem("matchline-resumes");
 
       if (array) {
         const parsed = JSON.parse(array) as Application[];
@@ -61,6 +64,10 @@ export default function Home() {
         const parsed = JSON.parse(legacy) as Application;
         setApplication(parsed);
         setSavedApplications([parsed]);
+      }
+
+      if (storedResumes) {
+        setSavedResumes(JSON.parse(storedResumes) as ResumeLibraryItem[]);
       }
 
       setHydrated(true);
@@ -130,6 +137,31 @@ export default function Home() {
   function analyze() {
     if (!canAnalyze) return;
     setAnalysis(analyzeMatch(resumeText, jobText));
+    setInterviewPrep(null);
+    setBulletSuggestions(null);
+    setJobBrief(null);
+    setApplicationPack(null);
+  }
+
+  function saveCurrentResume() {
+    if (!resumeText.trim()) return;
+    const nextEntry: ResumeLibraryItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: `Resume ${savedResumes.length + 1}`,
+      text: resumeText.trim(),
+      savedAt: new Date().toISOString(),
+    };
+
+    const nextResumes = [nextEntry, ...savedResumes.filter((item) => item.text !== resumeText.trim())];
+    setSavedResumes(nextResumes);
+    window.localStorage.setItem("matchline-resumes", JSON.stringify(nextResumes));
+  }
+
+  function loadResumeFromLibrary(item: ResumeLibraryItem) {
+    setResumeText(item.text);
+    setResumeFile(null);
+    setResumeStatus("ready");
+    setAnalysis(null);
     setInterviewPrep(null);
     setBulletSuggestions(null);
     setJobBrief(null);
@@ -218,8 +250,13 @@ export default function Home() {
 
           <div className="action-row">
             <div className="action-hint"><span className="hint-mark">i</span><span>We will never invent experience or change your original documents.</span></div>
-            <button className="primary-button" type="button" disabled={!canAnalyze} onClick={analyze}>Run match analysis <span aria-hidden="true">→</span></button>
+            <div className="action-stack">
+              <button className="secondary-button" type="button" disabled={!resumeText.trim()} onClick={saveCurrentResume}>Save resume <span aria-hidden="true">+</span></button>
+              <button className="primary-button" type="button" disabled={!canAnalyze} onClick={analyze}>Run match analysis <span aria-hidden="true">→</span></button>
+            </div>
           </div>
+
+          {(savedResumes.length > 0 || Boolean(resumeText.trim())) && <ResumeLibraryPanel resumes={savedResumes} currentText={resumeText} onLoadResume={loadResumeFromLibrary} onSaveResume={saveCurrentResume} />}
 
           {analysis && <AnalysisPanel result={analysis} onEdit={() => setAnalysis(null)} onSave={() => setTrackerOpen(true)} onPrep={() => setInterviewPrep(buildInterviewPrep(analysis, resumeText))} onBullets={() => setBulletSuggestions(buildBulletSuggestions(resumeText, analysis))} onBrief={() => setJobBrief(buildJobBrief(analysis))} onPack={() => setApplicationPack(buildApplicationPack(analysis, buildInterviewPrep(analysis, resumeText)))} />}
           {(trackerOpen || (hydrated && application)) && <ApplicationTracker application={application} score={analysis?.score ?? application?.score ?? 0} savedApplications={savedApplications} onSave={(nextApplication) => {
@@ -261,6 +298,19 @@ function AnalysisPanel({ result, onEdit, onSave, onPrep, onBullets, onBrief, onP
         <div><h3>Grounded suggestions</h3>{result.suggestions.length ? result.suggestions.map((item) => <p className="evidence-item suggestion" key={item}>{item}</p>) : <p className="empty-analysis">Your sources are aligned. Review the wording before applying.</p>}</div>
       </div>
       <div className="analysis-footer"><span><span className="hint-mark">i</span> Suggestions never add experience you did not provide.</span><div className="analysis-actions"><button className="edit-analysis" type="button" onClick={onEdit}>Edit sources</button><button className="prep-button" type="button" onClick={onBullets}>Tailor bullets <span>↗</span></button><button className="prep-button" type="button" onClick={onPrep}>Prep interview <span>↗</span></button><button className="prep-button" type="button" onClick={onBrief}>Job brief <span>↗</span></button><button className="prep-button" type="button" onClick={onPack}>Application pack <span>↗</span></button><button className="track-button" type="button" onClick={onSave}>Save to tracker <span>+</span></button></div></div>
+    </section>
+  );
+}
+
+function ResumeLibraryPanel({ resumes, currentText, onLoadResume, onSaveResume }: { resumes: ResumeLibraryItem[]; currentText: string; onLoadResume: (resume: ResumeLibraryItem) => void; onSaveResume: () => void }) {
+  return (
+    <section className="library-panel" id="library" aria-live="polite">
+      <div className="library-header"><div><p className="section-kicker">Resume library</p><h2>Keep strong versions ready.</h2><p>Store tailored resume drafts and reload them whenever you need to compare a new role.</p></div>{currentText.trim() && <button className="secondary-button" type="button" onClick={onSaveResume}>Save current <span>+</span></button>}</div>
+      {resumes.length ? (
+        <div className="library-list">{resumes.map((resume) => <button type="button" className="library-item" key={resume.id} onClick={() => onLoadResume(resume)}><div><strong>{resume.name}</strong><span>{new Date(resume.savedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span></div><p>{resume.text.slice(0, 130)}{resume.text.length > 130 ? "…" : ""}</p></button>)}</div>
+      ) : (
+        <div className="empty-library"><strong>No saved resumes yet.</strong><p>Save a current draft to build a reusable library for future jobs.</p></div>
+      )}
     </section>
   );
 }
